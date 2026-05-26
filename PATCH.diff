@@ -1,0 +1,87 @@
+diff --git a/ink/termio/csi.ts b/ink/termio/csi.ts
+--- a/ink/termio/csi.ts
++++ b/ink/termio/csi.ts
+@@ -294,12 +294,16 @@
+ // See: https://sw.kovidgoyal.net/kitty/keyboard-protocol/
+
+ /**
+- * Enable Kitty keyboard protocol with basic modifier reporting
+- * CSI > 1 u - pushes mode with flags=1 (disambiguate escape codes)
+- * This makes Shift+Enter send CSI 13;2 u instead of just CR
++ * Enable Kitty keyboard protocol with disambiguation + alternate-keys reporting.
++ * CSI > 5 u - pushes mode with flags=5 = bit 0 (disambiguate escape codes)
++ * | bit 2 (report alternate keys).
++ *
++ * bit 2 is what makes ctrl+c / ctrl+e / ... work on non-Latin keyboard layouts
++ * (Cyrillic, Greek, Arabic, Hebrew, ...): the terminal emits the actual
++ * Unicode codepoint AND the base-layout (US) keycode, e.g.
++ *   CSI 1089:1089:99 ; 5 u   =  ctrl+С (Cyrillic) on RU layout, base = c
++ *
++ * Terminals are required by the spec to ignore unknown bits, so emitting >5u
++ * is safe on older kitty / Ghostty / tmux + xterm that only honour bit 0.
+  */
+-export const ENABLE_KITTY_KEYBOARD = csi('>1u')
++export const ENABLE_KITTY_KEYBOARD = csi('>5u')
+
+ /**
+  * Disable Kitty keyboard protocol
+
+
+diff --git a/ink/parse-keypress.ts b/ink/parse-keypress.ts
+--- a/ink/parse-keypress.ts
++++ b/ink/parse-keypress.ts
+@@ -20,8 +20,12 @@
+ // ESC = CSI = OSC delimiters and patterns used across the parser.
+ //
+ // CSI u (kitty keyboard protocol): ESC [ codepoint [; modifier] u
+-// Kitty alternates: ESC [ codepoint[:shifted[:base]] [;modifier[:event-type][;text-as-codepoints]] u
+-const CSI_U_RE = /^\x1b\[(\d+)(?:;(\d+))?u/
++// Full kitty syntax we now consume:
++//   ESC [ codepoint [: shifted [: base-layout-key]] [; modifier [: event-type] [; text-as-codepoints]] u
++// We need group 3 (base-layout-key) to route ctrl+c / ctrl+e / ... to the
++// physical US position regardless of the active keyboard layout.
++const CSI_U_RE =
++  /^\x1b\[(\d+)(?::(\d+))?(?::(\d+))?(?:;(\d+)(?::\d+)?(?:;[\d:]+)?)?u/
+
+ // xterm modifyOtherKeys: ESC [ 27 ; modifier ; keycode ~
+@@ -629,12 +633,29 @@
+   // Handle CSI u (kitty keyboard protocol): ESC [ codepoint [; modifier] u
+-  // Example: ESC[13;2u = Shift+Enter, ESC[27u = Escape (no modifiers)
++  // Example: ESC[13;2u = Shift+Enter, ESC[27u = Escape (no modifiers)
++  // With report-alternate-keys flag (CSI >5u) the terminal also reports the
++  // base-layout-key, which we use for ctrl/super combos so ctrl+c works on
++  // non-Latin keyboard layouts. See PR description for details.
+   let match: RegExpExecArray | null
+   if ((match = CSI_U_RE.exec(s))) {
+-    const codepoint = parseInt(match[1]!, 10)
+-    // Modifier defaults to 1 (no modifiers) when not present
+-    const modifier = match[2] ? parseInt(match[2], 10) : 1
++    const codepoint     = parseInt(match[1]!, 10)
++    const baseLayoutKey = match[3] !== undefined ? parseInt(match[3], 10) : undefined
++    // Modifier defaults to 1 (no modifiers) when not present
++    const modifier = match[4] !== undefined ? parseInt(match[4], 10) : 1
+     const mods = decodeModifier(modifier)
+-    const name = keycodeToName(codepoint)
++
++    // Modifier-combo bindings (ctrl+c, super+v, ...) must be layout-independent
++    // → use the physical (US) base-layout-key when the terminal provides it.
++    // Plain / shift typing (Б, ñ, ü, ...) must produce the actual character
++    // → keep the raw codepoint so text input still receives the user's letter.
++    const useBaseKey =
++      (mods.ctrl || mods.super) && baseLayoutKey !== undefined
++    const name = keycodeToName(useBaseKey ? baseLayoutKey! : codepoint)
++
+     return {
+       kind: 'key',
+       name,
+       fn: false,
+       ctrl: mods.ctrl,
+       meta: mods.meta,
+       shift: mods.shift,
+       option: false,
+       super: mods.super,
+       sequence: s,
+       raw: s,
+       isPasted: false,
+     }
+   }
