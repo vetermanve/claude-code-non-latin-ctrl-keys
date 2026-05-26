@@ -68,7 +68,7 @@ listens for `key.ctrl && name === 'c'`, so the same path drops it as well.
 Three small changes, all backwards-compatible. Full diff and a
 zero-dependency reproduction are in the companion repo:
 
-**[<RFC_REPO_URL>](<RFC_REPO_URL>)**
+**<https://github.com/vetermanve/claude-code-non-latin-ctrl-keys>**
 
 ### 1. Enable the alternate-keys flag (`ink/termio/csi.ts`)
 
