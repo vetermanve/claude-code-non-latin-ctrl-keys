@@ -1,5 +1,7 @@
 # claude-code: ctrl+c on non-Latin keyboard layouts
 
+[![repro](https://github.com/vetermanve/claude-code-non-latin-ctrl-keys/actions/workflows/repro.yml/badge.svg)](https://github.com/vetermanve/claude-code-non-latin-ctrl-keys/actions/workflows/repro.yml)
+
 A proposed fix for [anthropics/claude-code](https://github.com/anthropics/claude-code):
 ctrl+c (and every other ctrl+letter / super+letter binding) silently breaks
 when the user has a non-Latin keyboard layout active — Cyrillic (Russian,
