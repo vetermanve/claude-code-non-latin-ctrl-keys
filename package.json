@@ -1,0 +1,11 @@
+{
+  "name": "claude-code-non-latin-ctrl-keys",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Proposed fix for Claude Code: ctrl+<letter> bindings on non-Latin keyboard layouts (Cyrillic, Greek, Arabic, ...). Three-file patch via Kitty alternate-keys progressive flag.",
+  "scripts": {
+    "repro": "node repro/repro-ru-ctrl-c.mjs",
+    "test": "node repro/repro-ru-ctrl-c.mjs"
+  },
+  "license": "MIT"
+}
